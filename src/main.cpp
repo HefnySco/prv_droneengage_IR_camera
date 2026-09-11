@@ -14,6 +14,7 @@
 #include "./de_common/de_databus/localConfigFile.hpp"
 #include "./de_common/de_databus/udpClient.hpp"
 #include "./de_common/de_databus/de_module.hpp"
+#include "./de_common/de_databus/de_facade_base.hpp"
 #include "ir_camera/ir_camera_main.hpp"
 #include "ir_camera/ir_camera_andruav_message_parser.hpp"
 
@@ -278,6 +279,10 @@ void init (int argc, char *argv[])
 
     // should be last
     initDEModule (argc,argv);
+
+    // de_ir_camera runs OpenCV thermal + RGB fusion; tighten the generic
+    // 500MB/20MB-h defaults to fit this lighter module.
+    de::comm::CFacade_Base::getInstance().configureMemoryStatus(400, 15);
 }
 
 
