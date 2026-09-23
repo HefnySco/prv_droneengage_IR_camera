@@ -289,6 +289,7 @@ void init (int argc, char *argv[])
 void uninit ()
 {
     cIRCameraMain.uninit();
+    cModule.uninit();
 	m_exit = true;
 
     // Don't call exit(0) here - let main loop exit naturally
