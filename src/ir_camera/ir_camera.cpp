@@ -32,13 +32,14 @@ uint16_t g_thermal_rows = 0;
 uint16_t g_thermal_cols = 0;
 std::atomic<bool> g_frame_ready{false};
 
-bool CIRCamera::init(const std::string& thermal_port, 
+bool CIRCamera::init(const std::string& thermal_port,
                       const std::string& output_video_device,
                       uint16_t frames_to_skip_between_messages,
                       const std::string& source_video_device,
                       bool dual_camera_enabled,
                       int display_mode,
-                      bool display_enabled) {
+                      bool display_enabled,
+                      bool de_camera_draw) {
     
     // Load configuration for temporal averaging
     de::CConfigFile& config = de::CConfigFile::getInstance();
@@ -68,6 +69,7 @@ bool CIRCamera::init(const std::string& thermal_port,
     m_dual_camera_enabled = dual_camera_enabled;
     m_display_mode = display_mode;
     m_display_enabled = display_enabled;
+    m_de_camera_draw = de_camera_draw;
     m_source_video_device = source_video_device;
 
     // Initialize thermal camera
@@ -297,17 +299,33 @@ void CIRCamera::pause() {
 }
 
 void CIRCamera::stop() {
+    clearCameraOverlayShapes();
+
     if (!m_process)
         return;
-    
+
     m_process = false;
-    
+
     if (m_callback_camera != nullptr) {
         m_callback_camera->onIRStatusChanged(TrackingTarget_STATUS_TRACKING_STOPPED);
     }
 
     if (m_framesThread.joinable())
         m_framesThread.join();
+}
+
+void CIRCamera::setCameraDraw(const bool de_camera_draw) {
+    if (!de_camera_draw) {
+        clearCameraOverlayShapes();
+    }
+    m_de_camera_draw = de_camera_draw;
+}
+
+void CIRCamera::clearCameraOverlayShapes() {
+    if (m_overlay_shapes_drawn && m_callback_camera != nullptr) {
+        m_callback_camera->onCameraOverlayRemove();
+        m_overlay_shapes_drawn = false;
+    }
 }
 
 void CIRCamera::start() {
@@ -489,29 +507,49 @@ void CIRCamera::processIRFrames() {
         // Find hot and cold points on thermal frame
         findHotColdPoints(thermal_frame, hot_point, cold_point, max_temp, min_temp);
 
+        // + marker size/thickness in thermal pixels
+        const int marker_size = 5;
+        const int marker_thickness = 2;
+
         // Draw + markers on display frame (averaged or original)
-        int marker_size = 5;
-        int marker_thickness = 2;
-        
-        // Red + for hot point
-        cv::line(display_frame, 
-                 cv::Point(hot_point.x - marker_size, hot_point.y), 
-                 cv::Point(hot_point.x + marker_size, hot_point.y), 
-                 cv::Scalar(0, 0, 255), marker_thickness);
-        cv::line(display_frame, 
-                 cv::Point(hot_point.x, hot_point.y - marker_size), 
-                 cv::Point(hot_point.x, hot_point.y + marker_size), 
-                 cv::Scalar(0, 0, 255), marker_thickness);
-        
-        // Blue + for cold point
-        cv::line(display_frame, 
-                 cv::Point(cold_point.x - marker_size, cold_point.y), 
-                 cv::Point(cold_point.x + marker_size, cold_point.y), 
-                 cv::Scalar(255, 0, 0), marker_thickness);
-        cv::line(display_frame, 
-                 cv::Point(cold_point.x, cold_point.y - marker_size), 
-                 cv::Point(cold_point.x, cold_point.y + marker_size), 
-                 cv::Scalar(255, 0, 0), marker_thickness);
+        if (m_de_camera_draw) {
+            // The '+' markers are drawn by de_camera's overlay library on the
+            // streamed frame instead of painting them on the thermal frame.
+            // Sent on the messaging cadence; positions are normalized against
+            // the output frame (display-mode aware).
+            const bool should_skip_overlay = (frame_counter % m_frames_to_skip_between_messages) != 0;
+            if (!should_skip_overlay && m_callback_camera) {
+                const bool rgb_active = m_dual_camera_enabled && !rgb_frame.empty();
+                const cv::Point2f hot_out = mapThermalToOutputPoint(hot_point, rgb_active);
+                const cv::Point2f cold_out = mapThermalToOutputPoint(cold_point, rgb_active);
+                const float marker_arm = cv::norm(mapThermalToOutputPoint(hot_point + cv::Point(0, marker_size), rgb_active) - hot_out);
+                m_callback_camera->onCameraOverlayHotCold(
+                    hot_out.x, hot_out.y,
+                    cold_out.x, cold_out.y,
+                    marker_arm);
+                m_overlay_shapes_drawn = true;
+            }
+        } else {
+            // Red + for hot point
+            cv::line(display_frame,
+                     cv::Point(hot_point.x - marker_size, hot_point.y),
+                     cv::Point(hot_point.x + marker_size, hot_point.y),
+                     cv::Scalar(0, 0, 255), marker_thickness);
+            cv::line(display_frame,
+                     cv::Point(hot_point.x, hot_point.y - marker_size),
+                     cv::Point(hot_point.x, hot_point.y + marker_size),
+                     cv::Scalar(0, 0, 255), marker_thickness);
+
+            // Blue + for cold point
+            cv::line(display_frame,
+                     cv::Point(cold_point.x - marker_size, cold_point.y),
+                     cv::Point(cold_point.x + marker_size, cold_point.y),
+                     cv::Scalar(255, 0, 0), marker_thickness);
+            cv::line(display_frame,
+                     cv::Point(cold_point.x, cold_point.y - marker_size),
+                     cv::Point(cold_point.x, cold_point.y + marker_size),
+                     cv::Scalar(255, 0, 0), marker_thickness);
+        }
 
         // Combine frames based on display mode
         if (m_dual_camera_enabled && !rgb_frame.empty()) {
@@ -683,6 +721,70 @@ float CIRCamera::revScaleX(const float& x) const {
 
 float CIRCamera::revScaleY(const float& y) const {
     return (y / m_thermal_height);
+}
+
+cv::Point2f CIRCamera::mapThermalToOutputPoint(const cv::Point2f& point, const bool rgb_active) const {
+    cv::Point2f out(0.0f, 0.0f);
+
+    if (!rgb_active || m_rgb_width <= 0 || m_rgb_height <= 0) {
+        // thermal-only output: the output frame IS the thermal frame
+        out.x = point.x / m_thermal_width;
+        out.y = point.y / m_thermal_height;
+    } else {
+        switch (m_display_mode) {
+        case 2: {
+            // side-by-side: thermal resized to RGB height and appended right
+            // (mirrors sideBySide())
+            const double scale = static_cast<double>(m_rgb_height) / m_thermal_height;
+            const int thermal_out_width = (static_cast<int>(m_thermal_width * scale) + 1) & ~1;
+            const int total_width = m_rgb_width + thermal_out_width;
+            out.x = (m_rgb_width + point.x * scale) / total_width;
+            out.y = (point.y * scale) / m_rgb_height;
+            break;
+        }
+        case 3: {
+            // overlay: thermal resized to RGB dims then warped by the
+            // calibration affine (mirrors overlayThermalOnRGB()/stretchImage())
+            const cv::Point2f rgb_point(point.x * m_rgb_width / m_thermal_width,
+                                        point.y * m_rgb_height / m_thermal_height);
+            const cv::Point2f center(m_rgb_width / 2.0f, m_rgb_height / 2.0f);
+            cv::Mat rot_matrix = cv::getRotationMatrix2D(center, m_calib_params.rotation, 1.0);
+            rot_matrix.at<double>(0, 0) *= m_calib_params.scale_x;
+            rot_matrix.at<double>(0, 1) *= m_calib_params.scale_x;
+            rot_matrix.at<double>(1, 0) *= m_calib_params.scale_y;
+            rot_matrix.at<double>(1, 1) *= m_calib_params.scale_y;
+            rot_matrix.at<double>(0, 2) += m_calib_params.offset_x;
+            rot_matrix.at<double>(1, 2) += m_calib_params.offset_y;
+            out.x = (rot_matrix.at<double>(0, 0) * rgb_point.x +
+                     rot_matrix.at<double>(0, 1) * rgb_point.y +
+                     rot_matrix.at<double>(0, 2)) / m_rgb_width;
+            out.y = (rot_matrix.at<double>(1, 0) * rgb_point.x +
+                     rot_matrix.at<double>(1, 1) * rgb_point.y +
+                     rot_matrix.at<double>(1, 2)) / m_rgb_height;
+            break;
+        }
+        case 4: {
+            // picture-in-picture: thermal shrunk into the bottom-right corner
+            // (mirrors pictureInPicture() default pip_scale=0.3, margin=10)
+            const int pip_width  = static_cast<int>(m_rgb_width * 0.3);
+            const int pip_height = static_cast<int>(m_rgb_height * 0.3);
+            const int pip_x = m_rgb_width - pip_width - 10;
+            const int pip_y = m_rgb_height - pip_height - 10;
+            out.x = (pip_x + (point.x / m_thermal_width) * pip_width) / m_rgb_width;
+            out.y = (pip_y + (point.y / m_thermal_height) * pip_height) / m_rgb_height;
+            break;
+        }
+        default:
+            // mode 1 (separate) or anything else outputs the thermal frame
+            out.x = point.x / m_thermal_width;
+            out.y = point.y / m_thermal_height;
+            break;
+        }
+    }
+
+    out.x = std::min(1.0f, std::max(0.0f, out.x));
+    out.y = std::min(1.0f, std::max(0.0f, out.y));
+    return out;
 }
 
 // Dual camera helper methods implementation

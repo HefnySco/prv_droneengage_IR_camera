@@ -1,7 +1,6 @@
 
 #include <algorithm>
 #include <iostream>
-#include <stdio.h>
 
 #include "../de_common/de_databus/configFile.hpp"
 #include "../de_common/de_databus/messages.hpp"
@@ -54,7 +53,8 @@ bool CIRCameraMain::init() {
       m_source_video_device,
       m_dual_camera_enabled,
       m_display_mode,
-      m_display_enabled);
+      m_display_enabled,
+      m_de_camera_draw);
   if (ok == false) {
     std::cout << _ERROR_CONSOLE_BOLD_TEXT_
               << "FATAL ERROR:" << _INFO_CONSOLE_TEXT
@@ -134,13 +134,29 @@ void CIRCameraMain::reloadParametersIfConfigChanged() {
   m_camera_orientation = DEF_CAMERA_ORIENTATION_DEG_0;
   if (tracking.contains("camera_orientation")) {
     m_camera_orientation = tracking["camera_orientation"].get<uint16_t>();
-    
+
     std::cout << _LOG_CONSOLE_BOLD_TEXT
                   << "Using camera_orientation:" << _INFO_CONSOLE_BOLD_TEXT
                   << m_camera_orientation << _NORMAL_CONSOLE_TEXT_
                   << std::endl;
   }
-    
+
+  m_de_camera_draw = false;
+  if (tracking.contains("de_camera_draw")) {
+    m_de_camera_draw = tracking["de_camera_draw"].get<bool>();
+
+    std::cout << _LOG_CONSOLE_BOLD_TEXT
+                  << "Using de_camera_draw:" << _INFO_CONSOLE_BOLD_TEXT
+                  << m_de_camera_draw << _NORMAL_CONSOLE_TEXT_
+                  << std::endl;
+  }
+
+  // m_camera is null during the first read inside init(); the value is
+  // passed to CIRCamera::init there. On later config reloads propagate it.
+  if (m_camera) {
+    m_camera->setCameraDraw(m_de_camera_draw);
+  }
+
 }
 
 bool CIRCameraMain::readConfigParameters() {
@@ -547,4 +563,28 @@ void CIRCameraMain::onIRStatusChanged(const int& status)
             << std::to_string(m_ir_status) << _NORMAL_CONSOLE_TEXT_
             << std::endl;
 #endif
+}
+
+/**
+ * Called by CIRCamera when de_camera_draw is enabled and the hot/cold '+'
+ * markers are updated. Coordinates are normalized [0..1] against the output
+ * frame, (0,0) top-left; marker_arm is the '+' arm half-length as a fraction
+ * of output frame height.
+ */
+void CIRCameraMain::onCameraOverlayHotCold(const float& hot_x, const float& hot_y,
+                                           const float& cold_x, const float& cold_y,
+                                           const float& marker_arm)
+{
+  m_ir_camera_facade.sendCameraOverlayHotCold(std::string(""), hot_x, hot_y,
+                                              cold_x, cold_y,
+                                              marker_arm);
+}
+
+/**
+ * Called by CIRCamera when the hot/cold markers should be removed from the
+ * de_camera overlay (detection stopped or draw mode disabled).
+ */
+void CIRCameraMain::onCameraOverlayRemove()
+{
+  m_ir_camera_facade.sendCameraOverlayRemove(std::string(""));
 }

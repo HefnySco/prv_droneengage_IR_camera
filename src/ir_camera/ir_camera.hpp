@@ -24,8 +24,12 @@ public:
                                  const float& cold_x, const float& cold_y,
                                  const float& max_temp, const float& min_temp,
                                  const bool should_skip_message) = 0;
-    
+
     virtual void onIRStatusChanged(const int& status) = 0;
+    virtual void onCameraOverlayHotCold(const float& hot_x, const float& hot_y,
+                                        const float& cold_x, const float& cold_y,
+                                        const float& marker_arm) = 0;
+    virtual void onCameraOverlayRemove() = 0;
 };
 
 class CIRCamera {
@@ -41,13 +45,14 @@ public:
     }
 
     // Initialization
-    bool init(const std::string& thermal_port, 
+    bool init(const std::string& thermal_port,
               const std::string& output_video_device,
               uint16_t frames_to_skip_between_messages,
               const std::string& source_video_device = "",
               bool dual_camera_enabled = false,
               int display_mode = 3,
-              bool display_enabled = false);
+              bool display_enabled = false,
+              bool de_camera_draw = false);
     
     bool uninit();
     
@@ -55,6 +60,7 @@ public:
     void start();
     void stop();
     void pause();
+    void setCameraDraw(const bool de_camera_draw);
     
     // Core processing loop (runs in thread)
     void processIRFrames();
@@ -134,6 +140,13 @@ private:
     // Coordinate conversion (pixel to normalized)
     float revScaleX(const float& x) const;
     float revScaleY(const float& y) const;
+    void clearCameraOverlayShapes();
+
+    // Maps a point in rotated thermal-pixel space to normalized [0..1]
+    // coordinates of the output (streamed) frame, following the active
+    // display mode (thermal-only, side-by-side, overlay, pip). rgb_active
+    // tells whether the current output frame is a dual-camera combine.
+    cv::Point2f mapThermalToOutputPoint(const cv::Point2f& point, const bool rgb_active) const;
 
 private:
     // Dual camera helper methods
@@ -173,6 +186,8 @@ private:
     bool m_dual_camera_enabled = false;
     bool m_display_enabled = false;
     int m_display_mode = 3;  // 1=separate, 2=side-by-side, 3=overlay, 4=pip
+    bool m_de_camera_draw = false;
+    bool m_overlay_shapes_drawn = false;
     cv::VideoCapture m_rgb_capture;
     std::string m_source_video_device;
     int m_rgb_width = 0;

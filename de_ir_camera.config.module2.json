@@ -35,7 +35,10 @@
     "tracking": {
         "camera_orientation": 0, // 0b0000 bit:0 horizontal/vertical, bits1,2: rotation (0,90,180,270)
         "camera_flipped": false,
-        "tracking_camera_direction": 1  // none, front , back , down , up 
+        "tracking_camera_direction": 1,  // none, front , back , down , up 
+        // when true the hot/cold markers are sent to de_camera to draw them
+        // using its internal overlay library instead of drawing them locally
+        "de_camera_draw": true
     },
     // Advanced Parameters:
     "advanced_tracking": {

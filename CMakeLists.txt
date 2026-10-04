@@ -33,8 +33,8 @@ set(VERSION_FILE "${CMAKE_SOURCE_DIR}/.version")
 
 # Manually set major, minor, and bugfix versions (you can change these)
 set(MAJOR_VERSION 0)
-set(MINOR_VERSION 10)
-set(BUGFIX_VERSION 6)
+set(MINOR_VERSION 11)
+set(BUGFIX_VERSION 0)
 
 if(EXISTS ${VERSION_FILE})
     file(READ ${VERSION_FILE} CURRENT_VERSION)
@@ -88,6 +88,7 @@ SET (CMAKE_CXX_COMPILER /usr/bin/g++)
 #C++ Version
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(Threads REQUIRED)
 
 # Find OpenCV package

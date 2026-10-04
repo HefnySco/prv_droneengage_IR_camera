@@ -79,8 +79,12 @@ namespace ir_camera
                         const float& cold_x, const float& cold_y,
                         const float& max_temp, const float& min_temp,
                         const bool should_skip_message) override;
-    
+
             void onIRStatusChanged(const int& status) override;
+            void onCameraOverlayHotCold(const float& hot_x, const float& hot_y,
+                        const float& cold_x, const float& cold_y,
+                        const float& marker_arm) override;
+            void onCameraOverlayRemove() override;
 
         private:
             bool readConfigParameters();
@@ -109,6 +113,7 @@ namespace ir_camera
             // Parsed configuration values
             uint16_t m_camera_orientation = DEF_CAMERA_ORIENTATION_DEG_0;
             bool m_camera_flipped = false;
+            bool m_de_camera_draw = false;
             uint8_t m_camera_direction = TRACKING_CAMERA_DIRECTION_NONE;
             
             std::string m_source_ir_port_device;

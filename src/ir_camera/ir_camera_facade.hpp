@@ -45,9 +45,16 @@ namespace ir_camera
         public:
             void sendHotColdPointsLocation(const std::string& target_party_id, const Json_de targets_location) const;
             void sendIRCameraStatus(const std::string& target_party_id, const int status) const;
-            
-            
-       
+            void sendCameraOverlayHotCold(const std::string& target_party_id,
+                                          const float& hot_x, const float& hot_y,
+                                          const float& cold_x, const float& cold_y,
+                                          const float& marker_arm) const;
+            void sendCameraOverlayRemove(const std::string& target_party_id) const;
+
+        protected:
+
+            mutable uint32_t m_overlay_send_count = 0;
+
     };
 }
 }
