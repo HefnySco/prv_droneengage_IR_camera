@@ -1,11 +1,11 @@
-# AGENTS.md — drone_engage_IR_camera
+# AGENTS.md — droneengage_IR_camera
 
 DroneEngage IR Camera module (`de_ir_camera`, binary `de_ir_tracker`).
 Thermal imaging detection and RGB+IR fusion: reads an MI48 thermal
 sensor + an RGB camera, detects hottest/coldest points per frame
 (with EMA smoothing), optionally fuses thermal with RGB, and publishes
 hot/cold point locations to the DroneEngage bus. **Detection/fusion
-only** — object tracking is the separate `drone_engage_tracking` module.
+only** — object tracking is the separate `droneengage_tracking` module.
 
 This is a **video pipeline** module: it reads from input video devices,
 processes, and writes the fused result to its `output_video_device_name`

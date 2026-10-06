@@ -6,7 +6,7 @@
 
 The **DroneEngage IR Camera Module** (`de_ir_camera`) is a C++ module that provides thermal imaging detection and RGB+IR fusion for the DroneEngage ecosystem. It reads thermal data from an MI48 thermal sensor, detects the hottest and coldest points in each frame, optionally fuses the thermal image with an RGB camera feed, and publishes hot/cold point locations to the DroneEngage communication bus.
 
-This module performs **detection and fusion**, not object tracking. It reports the hottest and coldest point locations every frame (with EMA smoothing). Object tracking is handled by the separate [`drone_engage_tracking`](https://github.com/DroneEngage/droneengage_tracking) module.
+This module performs **detection and fusion**, not object tracking. It reports the hottest and coldest point locations every frame (with EMA smoothing). Object tracking is handled by the separate [`droneengage_tracking`](https://github.com/DroneEngage/droneengage_tracking) module.
 
 ---
 
@@ -58,14 +58,14 @@ There are two ways to specify the output video device:
 
 The module tries `output_video_device_name` first. If the name is not found or not specified, it falls back to `output_video_device`. If neither is specified, the module runs in display-only mode (no V4L2 output).
 
-In this example, `de_ir_camera` writes its fused RGB+IR frame to the virtual device labeled `DE-TRK`. The next module in the chain (e.g. `drone_engage_tracking`) would be configured with `source_video_device_name: "DE-TRK"` to read from it.
+In this example, `de_ir_camera` writes its fused RGB+IR frame to the virtual device labeled `DE-TRK`. The next module in the chain (e.g. `droneengage_tracking`) would be configured with `source_video_device_name: "DE-TRK"` to read from it.
 
 ### Creating Virtual Video Devices
 
 Virtual devices are created using `v4l2loopback`. The DroneEngage tracking module includes a setup script:
 
 ```bash
-# From drone_engage_tracking/scripts/
+# From droneengage_tracking/scripts/
 sudo modprobe v4l2loopback devices=5 video_nr=1,2,3,4,5 \
     card_label="DE-CAM1,SIM-CAM1,DE-TRK,DE-RPI,DE-THERMAL" \
     exclusive_caps=1,1,1,1,1
@@ -116,7 +116,7 @@ RGB Camera (V4L2) ────────────┘        │
 ### Module Structure
 
 ```
-drone_engage_IR_camera/
+droneengage_IR_camera/
 ├── CMakeLists.txt
 ├── de_ir_camera.config.module.json    # Main config file
 ├── de_ir_camera.config.module2.json   # Alternate config (1280x720)
@@ -178,7 +178,7 @@ git submodule update --init --recursive
 ## Building
 
 ```bash
-cd drone_engage_IR_camera
+cd droneengage_IR_camera
 ./build.sh              # Debug build
 ./build.sh RELEASE      # Release build
 ```
