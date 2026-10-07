@@ -1,3 +1,4 @@
 bin/
 build/
+.cache/
 de_ir_camera.config.local
