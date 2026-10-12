@@ -393,6 +393,7 @@ void CIRCameraMain::stopDetection() {
     if (m_camera) {
         m_camera.get()->stop();
     }
+    m_track_manager.reset();
     
     m_ir_camera_facade.sendIRCameraStatus(std::string(""), m_ir_status);
 }
