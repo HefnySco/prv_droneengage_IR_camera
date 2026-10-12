@@ -6,6 +6,8 @@
 
 using Json_de = nlohmann::json;
 
+#include "../de_common/helpers/obs.hpp"
+
 #include "../de_common/de_databus/de_facade_base.hpp"
 #include "../de_common/de_databus/messages.hpp"
 
@@ -43,7 +45,7 @@ namespace ir_camera
             };
                 
         public:
-            void sendHotColdPointsLocation(const std::string& target_party_id, const Json_de targets_location) const;
+            void sendObservations(const std::string& target_party_id, const de::ai::ObservationFrame& frame) const;
             void sendIRCameraStatus(const std::string& target_party_id, const int status) const;
             void sendCameraOverlayHotCold(const std::string& target_party_id,
                                           const float& hot_x, const float& hot_y,

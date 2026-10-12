@@ -31,6 +31,7 @@ std::vector<float> g_thermal_temperatures;
 uint16_t g_thermal_rows = 0;
 uint16_t g_thermal_cols = 0;
 std::atomic<bool> g_frame_ready{false};
+uint64_t g_thermal_seq = 0;
 
 bool CIRCamera::init(const std::string& thermal_port,
                       const std::string& output_video_device,
@@ -45,6 +46,25 @@ bool CIRCamera::init(const std::string& thermal_port,
     de::CConfigFile& config = de::CConfigFile::getInstance();
     Json_de jsonConfig = config.GetConfigJSON();
     
+    if (jsonConfig.contains("hotspot") && jsonConfig["hotspot"].is_object()) {
+        const auto& h = jsonConfig["hotspot"];
+        m_hotspot_config.min_delta_c  = h.value("min_delta_c", m_hotspot_config.min_delta_c);
+        m_hotspot_config.min_temp_c   = h.value("min_temp_c", m_hotspot_config.min_temp_c);
+        m_hotspot_config.min_area_px  = h.value("min_area_px", m_hotspot_config.min_area_px);
+        m_hotspot_config.max_spots    = h.value("max_spots", m_hotspot_config.max_spots);
+        m_hotspot_config.cold_enabled = h.value("coldspot_enabled", m_hotspot_config.cold_enabled);
+    }
+    if (jsonConfig.contains("cam_id") && jsonConfig["cam_id"].is_string() && !jsonConfig["cam_id"].get<std::string>().empty()) {
+        m_cam_id = jsonConfig["cam_id"].get<std::string>();
+    }
+    std::cout << _LOG_CONSOLE_BOLD_TEXT << "hotspot: min_delta_c=" << _INFO_CONSOLE_BOLD_TEXT << m_hotspot_config.min_delta_c
+              << _LOG_CONSOLE_BOLD_TEXT << " min_temp_c=" << _INFO_CONSOLE_BOLD_TEXT << m_hotspot_config.min_temp_c
+              << _LOG_CONSOLE_BOLD_TEXT << " min_area_px=" << _INFO_CONSOLE_BOLD_TEXT << m_hotspot_config.min_area_px
+              << _LOG_CONSOLE_BOLD_TEXT << " max_spots=" << _INFO_CONSOLE_BOLD_TEXT << m_hotspot_config.max_spots
+              << _LOG_CONSOLE_BOLD_TEXT << " cold=" << _INFO_CONSOLE_BOLD_TEXT << m_hotspot_config.cold_enabled
+              << _LOG_CONSOLE_BOLD_TEXT << " cam_id=" << _INFO_CONSOLE_BOLD_TEXT << m_cam_id
+              << _NORMAL_CONSOLE_TEXT_ << std::endl;
+
     if (jsonConfig.contains("advanced_tracking")) {
         const auto& advanced = jsonConfig["advanced_tracking"];
         m_temporal_averaging_enabled = advanced.value("temporal_averaging_enabled", false);
@@ -347,6 +367,7 @@ void CIRCamera::onThermalFrame(const std::vector<float>& temperatures,
     g_thermal_rows = rows;
     g_thermal_cols = cols;
     g_thermal_temperatures = temperatures;
+    ++g_thermal_seq;
 
     // Create a matrix from temperature data
     cv::Mat frame(rows, cols, CV_32F);
@@ -374,6 +395,22 @@ void CIRCamera::onThermalFrame(const std::vector<float>& temperatures,
     m_thermal_height = g_thermal_frame.rows;
 
     g_frame_ready = true;
+}
+
+bool CIRCamera::latestTemperatures(cv::Mat& temps, uint64_t& seq) {
+    std::lock_guard<std::mutex> lock(g_frame_mutex);
+    if (g_thermal_temperatures.empty() || g_thermal_rows == 0 || g_thermal_cols == 0) {
+        return false;
+    }
+
+    temps = cv::Mat(g_thermal_rows, g_thermal_cols, CV_32F);
+    for (uint16_t c = 0; c < g_thermal_cols; ++c) {
+        for (uint16_t r = 0; r < g_thermal_rows; ++r) {
+            temps.at<float>(r, c) = g_thermal_temperatures[c * g_thermal_rows + r];
+        }
+    }
+    seq = g_thermal_seq;
+    return true;
 }
 
 void CIRCamera::findHotColdPoints(const cv::Mat& thermal_frame,
@@ -571,20 +608,15 @@ void CIRCamera::processIRFrames() {
             output_frame = display_frame;
         }
 
-        // Send callback with hot/cold point locations
-        const bool should_skip_message = (frame_counter % m_frames_to_skip_between_messages) != 0;
-        
-        if (m_callback_camera && !should_skip_message) {
-            std::cout << "Thermal dims: " << m_thermal_width << "x" << m_thermal_height 
-                      << " | Hot px: (" << hot_point.x << "," << hot_point.y << ")"
-                      << " | Cold px: (" << cold_point.x << "," << cold_point.y << ")" << std::endl;
-            
-            m_callback_camera->onHotColdPoints(
-                revScaleX(hot_point.x), revScaleY(hot_point.y),
-                revScaleX(cold_point.x), revScaleY(cold_point.y),
-                max_temp, min_temp,
-                should_skip_message
-            );
+        // One observation frame per NEW thermal frame (hotspots/coldspots as obs, 6546)
+        if (m_callback_camera) {
+            cv::Mat temps;
+            uint64_t seq = 0;
+            if (latestTemperatures(temps, seq) && seq != m_last_observed_seq) {
+                m_last_observed_seq = seq;
+                m_callback_camera->onObservations(
+                    de::ir_camera::detectHotspots(temps, m_hotspot_config, m_cam_id, get_time_usec_monotonic()));
+            }
         }
 
         // Stream to V4L2 device

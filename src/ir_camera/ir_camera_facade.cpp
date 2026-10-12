@@ -9,24 +9,22 @@ using namespace de::ir_camera;
 // High values to avoid colliding with shapes set by other senders.
 static constexpr uint32_t IRCAMERA_OVERLAY_SHAPE_ID = 9201;
 
-void CIRCamera_Facade::sendHotColdPointsLocation(
-    const std::string &target_party_id, const Json_de targets_location) const {
-  if (targets_location.empty()) {
+void CIRCamera_Facade::sendObservations(
+    const std::string &target_party_id, const de::ai::ObservationFrame &frame) const {
+  Json_de message;
+  std::string err;
+  if (!de::ai::obsBuild(frame, message, err)) {
+    std::cerr << _ERROR_CONSOLE_BOLD_TEXT_ << "dropping invalid observation frame: "
+              << _INFO_CONSOLE_TEXT << err << _NORMAL_CONSOLE_TEXT_ << std::endl;
     return;
   }
 
-  Json_de message = {{"t", targets_location}};
-
 #ifdef DDEBUG
-  std::cout << "tracking:" << targets_location.dump() << std::endl;
-#endif
-#ifdef DDEBUG
-  std::cout << _INFO_CONSOLE_BOLD_TEXT << "onTrack >> "
-            << _LOG_CONSOLE_BOLD_TEXT << targets_location.dump()
-            << _NORMAL_CONSOLE_TEXT_ << std::endl;
+  std::cout << _INFO_CONSOLE_BOLD_TEXT << "obs >> " << _LOG_CONSOLE_BOLD_TEXT
+            << message.dump() << _NORMAL_CONSOLE_TEXT_ << std::endl;
 #endif
   m_module.sendJMSG(target_party_id, message,
-                    TYPE_AndruavMessage_TrackingTargetLocation, true);
+                    TYPE_AndruavMessage_AI_OBSERVATIONS, true);
 }
 
 void CIRCamera_Facade::sendIRCameraStatus(

@@ -33,6 +33,27 @@
             "alpha": 0.5
         }},
 
+    // Camera the observations come from (obs cam_id); boxes are in the upright
+    // thermal image (sensor image rotated 90 deg clockwise), top-left, 0..1
+    "cam_id": "DE-THERMAL",
+
+    // Hotspot detection on the temperature matrix
+    "hotspot": {
+        "min_delta_c": 8.0,       // contrast above the frame median (below it for coldspots)
+        "min_temp_c": -50.0,      // absolute floor for hotspots, e.g. 28 to ignore anything below skin temperature
+        "min_area_px": 2,         // smallest blob in sensor pixels
+        "max_spots": 5,           // strongest blobs reported per class
+        "coldspot_enabled": false // also report "coldspot"
+    },
+
+    // Single temporal filter: a spot is published only once it is a confirmed track
+    "track": {
+        "confirm_hits": 3,
+        "max_misses": 5,
+        "iou_min": 0.3,
+        "min_conf": 0.25
+    },
+
     "tracking": {
         "camera_orientation": 0,        // 0b0000 bit:0 horizontal/vertical, bits1,2: rotation (0,90,180,270)
         "camera_flipped": false,
@@ -45,7 +66,6 @@
     "advanced_tracking": {
         "frames_to_skip_between_messages": 3, //optional default: 15
         "frame_to_skip_between_track_process": 2, //optional default: 5
-        "ema_alpha_base": 0.3,
         "temporal_averaging_enabled": false,
         "temporal_smooth_frames": 3
     }

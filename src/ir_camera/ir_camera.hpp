@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "serial_mi48.hpp"
+#include "hotspot_detector.hpp"
 
 #define DEF_CAMERA_ORIENTATION_DEG_0 0
 #define DEF_CAMERA_ORIENTATION_DEG_90 1
@@ -20,10 +21,8 @@ namespace ir_camera
 {
 class CCallBack_IRCamera {
 public:
-    virtual void onHotColdPoints(const float& hot_x, const float& hot_y,
-                                 const float& cold_x, const float& cold_y,
-                                 const float& max_temp, const float& min_temp,
-                                 const bool should_skip_message) = 0;
+    // one observation frame per new thermal frame (hotspot / coldspot, obs 6546)
+    virtual void onObservations(const de::ai::ObservationFrame& frame) = 0;
 
     virtual void onIRStatusChanged(const int& status) = 0;
     virtual void onCameraOverlayHotCold(const float& hot_x, const float& hot_y,
@@ -126,7 +125,10 @@ private:
                         const uint16_t rows, 
                         const uint16_t cols);
     
-    // Find hot/cold points in thermal data
+    // Copy the latest temperatures (raw sensor orientation) and the frame counter
+    bool latestTemperatures(cv::Mat& temps, uint64_t& seq);
+
+    // Find hot/cold points in thermal data (overlay markers only)
     void findHotColdPoints(const cv::Mat& thermal_frame,
                           cv::Point& hot_point,
                           cv::Point& cold_point,
@@ -181,6 +183,11 @@ private:
     std::thread m_thermal_thread;
     
     uint16_t m_frames_to_skip_between_messages = 3;
+
+    // hotspot observations
+    de::ir_camera::HotspotConfig m_hotspot_config;
+    std::string m_cam_id = "DE-THERMAL";
+    uint64_t m_last_observed_seq = 0;
     
     // Dual camera support
     bool m_dual_camera_enabled = false;

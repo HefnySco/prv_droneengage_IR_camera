@@ -3,8 +3,12 @@
 DroneEngage IR Camera module (`de_ir_camera`, binary `de_ir_tracker`).
 Thermal imaging detection and RGB+IR fusion: reads an MI48 thermal
 sensor + an RGB camera, detects hottest/coldest points per frame
-(with EMA smoothing), optionally fuses thermal with RGB, and publishes
-hot/cold point locations to the DroneEngage bus. **Detection/fusion
+optionally fuses thermal with RGB, and publishes thermal blobs as
+observations (`obs`, 6546: class `hotspot`, optionally `coldspot`, with
+`attrs.temp_c`, boxes top-left 0..1 in the upright thermal image) to the
+DroneEngage bus. Detection is `src/ir_camera/hotspot_detector.hpp` (pure,
+tested with `make -C test test`); the `"track"` config group confirms spots
+and gives each a stable `trk`. The old hot/cold message (1043) is gone. **Detection/fusion
 only** — object tracking is the separate `droneengage_tracking` module.
 
 This is a **video pipeline** module: it reads from input video devices,
@@ -17,7 +21,9 @@ and `de_common` vendoring.
 
     ./build.sh                 # DEBUG (only build script shipped)
 
-Out-of-source in `build/`. Binary: `bin/de_ir_tracker`.
+Out-of-source in `build/`. Binary: `bin/de_ir_camera`. On a host whose
+`mi48` install links `-lopencv_barcode` (OpenCV 4.14) the link step fails
+with `cannot find -lopencv_barcode`; the compile is unaffected.
 
 ### CMake options
 

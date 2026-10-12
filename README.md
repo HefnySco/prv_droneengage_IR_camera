@@ -4,7 +4,7 @@
 
 ## Overview
 
-The **DroneEngage IR Camera Module** (`de_ir_camera`) is a C++ module that provides thermal imaging detection and RGB+IR fusion for the DroneEngage ecosystem. It reads thermal data from an MI48 thermal sensor, detects the hottest and coldest points in each frame, optionally fuses the thermal image with an RGB camera feed, and publishes hot/cold point locations to the DroneEngage communication bus.
+The **DroneEngage IR Camera Module** (`de_ir_camera`) is a C++ module that provides thermal imaging detection and RGB+IR fusion for the DroneEngage ecosystem. It reads thermal data from an MI48 thermal sensor, detects hot (and optionally cold) blobs in each frame, optionally fuses the thermal image with an RGB camera feed, and publishes them as observations (`obs`, 6546, class `hotspot`/`coldspot` with `attrs.temp_c`; boxes top-left 0..1 in the upright thermal image) to the DroneEngage communication bus. The hot/cold point message (1043) is no longer sent; the hot/cold `+` markers on the de_camera overlay remain.
 
 This module performs **detection and fusion**, not object tracking. It reports the hottest and coldest point locations every frame (with EMA smoothing). Object tracking is handled by the separate [`droneengage_tracking`](https://github.com/DroneEngage/droneengage_tracking) module.
 
@@ -108,7 +108,7 @@ This creates 5 virtual devices with named labels. Modules reference these labels
 
 ```
 MI48 Thermal Sensor (serial) ─┐
-                               ├─ de_ir_camera ──→ Hot/Cold Points (UDP)
+                               ├─ de_ir_camera ──→ hotspot observations (obs 6546, UDP)
 RGB Camera (V4L2) ────────────┘        │
                                         └──→ Fused Video (V4L2 virtual device)
 ```
@@ -128,7 +128,7 @@ droneengage_IR_camera/
     ├── ir_camera/
     │   ├── ir_camera.hpp/cpp          # Core IR camera: thermal capture, fusion, V4L2 output
     │   ├── ir_camera_main.hpp/cpp     # Module orchestrator: config, EMA smoothing, coordinate transforms
-    │   ├── ir_camera_facade.hpp/cpp   # Communication facade (sends hot/cold points via UDP)
+    │   ├── ir_camera_facade.hpp/cpp   # Communication facade (sends hotspot observations via UDP)
     │   ├── ir_camera_andruav_message_parser.hpp/cpp  # Incoming message parser
     │   └── video.hpp/cpp              # V4L2 device utilities
     └── de_common/                     # DroneEngage common library (git submodule)
@@ -208,7 +208,9 @@ Configuration is in `de_ir_camera.config.module.json`. Key sections:
 | `tracking` | `camera_orientation` | Mount rotation: 0=0deg, 1=90deg, 2=180deg, 3=270deg |
 | `tracking` | `camera_flipped` | Mirror image horizontally |
 | `tracking` | `tracking_camera_direction` | Mount direction: 0=none, 1=front, 2=back, 3=down, 4=up |
-| `advanced_tracking` | `frames_to_skip_between_messages` | Throttle for hot/cold point messages |
+| `hotspot` | `min_delta_c`, `min_temp_c`, `min_area_px`, `max_spots`, `coldspot_enabled` | Blob detection on the temperature matrix |
+| `track` | `confirm_hits`, `max_misses`, `iou_min`, `min_conf` | Confirms spots as tracks (stable `trk`) |
+| `advanced_tracking` | `frames_to_skip_between_messages` | Throttle for the de_camera hot/cold marker overlay |
 | `advanced_tracking` | `ema_alpha_base` | EMA smoothing factor for point locations |
 | `advanced_tracking` | `temporal_averaging_enabled` | Enable rolling-average thermal frame filter |
 

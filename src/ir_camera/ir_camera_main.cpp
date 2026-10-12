@@ -271,10 +271,6 @@ bool CIRCameraMain::readConfigParameters() {
                                             ? 1
                                             : m_frames_to_skip_between_messages;
 
-    if (advanced_tracking.contains("ema_alpha_base")) {
-      m_ema_alpha_base = advanced_tracking["ema_alpha_base"].get<double>();
-    }
-
     std::cout << _SUCCESS_CONSOLE_BOLD_TEXT_
               << "Field Found: advanced_tracking field found:  "
               << _INFO_CONSOLE_TEXT
@@ -284,9 +280,17 @@ bool CIRCameraMain::readConfigParameters() {
 
   std::cout << _INFO_CONSOLE_TEXT
             << "frames_to_skip_between_messages: " << _LOG_CONSOLE_BOLD_TEXT
-            << m_frames_to_skip_between_messages << _INFO_CONSOLE_TEXT
-            << ", ema_alpha_base: " << _LOG_CONSOLE_BOLD_TEXT
-            << m_ema_alpha_base << _NORMAL_CONSOLE_TEXT_ << std::endl;
+            << m_frames_to_skip_between_messages << _NORMAL_CONSOLE_TEXT_ << std::endl;
+
+  de::ai::TrackManagerConfig track_config;
+  if (m_jsonConfig.contains("track") && m_jsonConfig["track"].is_object()) {
+    const Json_de& track = m_jsonConfig["track"];
+    if (track.contains("confirm_hits") && track["confirm_hits"].is_number_integer()) track_config.confirm_hits = track["confirm_hits"].get<int>();
+    if (track.contains("max_misses") && track["max_misses"].is_number_integer())     track_config.max_misses = track["max_misses"].get<int>();
+    if (track.contains("iou_min") && track["iou_min"].is_number())                   track_config.iou_min = track["iou_min"].get<double>();
+    if (track.contains("min_conf") && track["min_conf"].is_number())                 track_config.min_conf = track["min_conf"].get<double>();
+  }
+  m_track_manager.setConfig(track_config);
 
   // Read dual camera configuration
   if (m_jsonConfig.contains("dual_camera")) {
@@ -400,155 +404,14 @@ void CIRCameraMain::pauseDetection() {
 }
 
 
-void CIRCameraMain::onHotColdPoints(const float& hot_x, const float& hot_y,
-                        const float& cold_x, const float& cold_y,
-                        const float& max_temp, const float& min_temp,
-                        const bool should_skip_message)
+/**
+ * Hotspot observations of one thermal frame. Only confirmed tracks leave this
+ * module, each with a stable trk; the track manager is the single temporal
+ * filter here (one thermal frame in, one observation frame out, possibly empty).
+ */
+void CIRCameraMain::onObservations(const de::ai::ObservationFrame& frame)
 {
-  if (m_camera_direction == TRACKING_CAMERA_DIRECTION_NONE) {
-    return;
-  }
-
-  // Convert to centered coordinates [-0.5 to 0.5]
-  double hot_center_x = hot_x - 0.5;
-  double hot_center_y = hot_y - 0.5;
-  double cold_center_x = cold_x - 0.5;
-  double cold_center_y = cold_y - 0.5;
- m_ema_cold_init = false;
-  // Apply EMA smoothing for hot point
-  if (!m_ema_hot_init) {
-    m_ema_hot_x = hot_center_x;
-    m_ema_hot_y = hot_center_y;
-    m_ema_hot_init = true;
-  } else {
-    const double mag_hot = std::max(std::abs(hot_center_x - m_ema_hot_x), 
-                                     std::abs(hot_center_y - m_ema_hot_y));
-    const double alpha_hot = std::clamp(m_ema_alpha_base + 0.5 * mag_hot, 0.1, 0.8);
-    m_ema_hot_x = alpha_hot * hot_center_x + (1.0 - alpha_hot) * m_ema_hot_x;
-    m_ema_hot_y = alpha_hot * hot_center_y + (1.0 - alpha_hot) * m_ema_hot_y;
-  }
-
-  // // Apply EMA smoothing for cold point
-  if (!m_ema_cold_init) {
-    m_ema_cold_x = cold_center_x;
-    m_ema_cold_y = cold_center_y;
-    m_ema_cold_init = true;
-  } else {
-    const double mag_cold = std::max(std::abs(cold_center_x - m_ema_cold_x), 
-                                      std::abs(cold_center_y - m_ema_cold_y));
-    const double alpha_cold = std::clamp(m_ema_alpha_base + 0.5 * mag_cold, 0.1, 0.8);
-    m_ema_cold_x = alpha_cold * cold_center_x + (1.0 - alpha_cold) * m_ema_cold_x;
-    m_ema_cold_y = alpha_cold * cold_center_y + (1.0 - alpha_cold) * m_ema_cold_y;
-  }
-
-  std::cout << "Hot: (" << m_ema_hot_x << ", " << m_ema_hot_y << ") "
-            << "Cold: (" << m_ema_cold_x << ", " << m_ema_cold_y << ")" << std::endl;
-
-  double delta_hot_x, delta_hot_y, delta_hot_z = 0.0;
-  double delta_cold_x, delta_cold_y, delta_cold_z = 0.0;
-
-  // Apply camera orientation transformation for hot point
-  switch (m_camera_orientation) {
-  case DEF_CAMERA_ORIENTATION_DEG_0:
-    delta_hot_x = m_ema_hot_x;
-    delta_hot_y = m_ema_hot_y;
-    break;
-  case DEF_CAMERA_ORIENTATION_DEG_90:
-    delta_hot_x = m_ema_hot_y;
-    delta_hot_y = -m_ema_hot_x;
-    break;
-  case DEF_CAMERA_ORIENTATION_DEG_180:
-    delta_hot_x = -m_ema_hot_x;
-    delta_hot_y = -m_ema_hot_y;
-    break;
-  case DEF_CAMERA_ORIENTATION_DEG_270:
-    delta_hot_x = -m_ema_hot_y;
-    delta_hot_y = -m_ema_hot_x;
-    break;
-  default:
-    delta_hot_x = m_ema_hot_x;
-    delta_hot_y = m_ema_hot_y;
-    break;
-  }
-
-  // Apply camera orientation transformation for cold point
-  switch (m_camera_orientation) {
-  case DEF_CAMERA_ORIENTATION_DEG_0:
-    delta_cold_x = m_ema_cold_x;
-    delta_cold_y = m_ema_cold_y;
-    break;
-  case DEF_CAMERA_ORIENTATION_DEG_90:
-    delta_cold_x = m_ema_cold_y;
-    delta_cold_y = -m_ema_cold_x;
-    break;
-  case DEF_CAMERA_ORIENTATION_DEG_180:
-    delta_cold_x = -m_ema_cold_x;
-    delta_cold_y = -m_ema_cold_y;
-    break;
-  case DEF_CAMERA_ORIENTATION_DEG_270:
-    delta_cold_x = -m_ema_cold_y;
-    delta_cold_y = -m_ema_cold_x;
-    break;
-  default:
-    delta_cold_x = m_ema_cold_x;
-    delta_cold_y = m_ema_cold_y;
-    break;
-  }
-
-  if (m_camera_flipped) {
-    delta_hot_x = -delta_hot_x;
-    delta_cold_x = -delta_cold_x;
-  }
-
-  if (m_camera_direction == TRACKING_CAMERA_DIRECTION_BACK) {
-    delta_hot_x = -delta_hot_x;
-    delta_hot_y = -delta_hot_y;
-    delta_cold_x = -delta_cold_x;
-    delta_cold_y = -delta_cold_y;
-  }
-
-  // Apply precision limiting
-  delta_hot_x = roundToPrecision(delta_hot_x, 3);
-  delta_hot_y = roundToPrecision(delta_hot_y, 3);
-  delta_cold_x = roundToPrecision(delta_cold_x, 3);
-  delta_cold_y = roundToPrecision(delta_cold_y, 3);
-
-  Json_de targets = Json_de::array();
-
-  switch (m_camera_direction) {
-  case TRACKING_CAMERA_DIRECTION_FRONT:
-  case TRACKING_CAMERA_DIRECTION_BACK:
-    targets.push_back({{"type", "hot"}, {"x", delta_hot_x}, {"y", -delta_hot_y}, {"temp", max_temp}});
-    targets.push_back({{"type", "cold"}, {"x", delta_cold_x}, {"y", -delta_cold_y}, {"temp", min_temp}});
-    break;
-
-  case TRACKING_CAMERA_DIRECTION_DOWN:
-    delta_hot_z = delta_hot_y;
-    delta_cold_z = delta_cold_y;
-    targets.push_back({{"type", "hot"}, {"x", delta_hot_x}, {"y", delta_hot_z}, {"temp", max_temp}});
-    targets.push_back({{"type", "cold"}, {"x", delta_cold_x}, {"y", delta_cold_z}, {"temp", min_temp}});
-    break;
-
-  case TRACKING_CAMERA_DIRECTION_UP:
-    delta_hot_z = -delta_hot_y;
-    delta_cold_z = -delta_cold_y;
-    targets.push_back({{"type", "hot"}, {"x", delta_hot_x}, {"y", delta_hot_z}, {"temp", max_temp}});
-    targets.push_back({{"type", "cold"}, {"x", delta_cold_x}, {"y", delta_cold_z}, {"temp", min_temp}});
-    break;
-
-  default:
-    return;
-  }
-
-#ifdef DDEBUG
-  std::cout << _INFO_CONSOLE_BOLD_TEXT << "onHotColdPoints >> "
-            << _LOG_CONSOLE_BOLD_TEXT << targets.dump()
-            << _NORMAL_CONSOLE_TEXT_ << std::endl;
-#endif
-
-  if (!should_skip_message) {
-    m_ir_camera_facade.sendHotColdPointsLocation(std::string(""), targets);
-  }
+  m_ir_camera_facade.sendObservations(std::string(""), m_track_manager.update(frame));
 }
 
 void CIRCameraMain::onIRStatusChanged(const int& status)

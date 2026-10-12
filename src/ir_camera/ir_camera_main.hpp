@@ -7,6 +7,7 @@
 #include "../de_common/helpers/json_nlohmann.hpp"
 #include "ir_camera.hpp"
 #include "ir_camera_facade.hpp"
+#include "../de_common/helpers/track_manager.hpp"
 
 using Json_de = nlohmann::json;
 
@@ -75,10 +76,7 @@ namespace ir_camera
             void OnConnectionStatusChangedWithAndruavServer (const int status) {};
         
             // Callback from CIRCamera
-            void onHotColdPoints(const float& hot_x, const float& hot_y,
-                        const float& cold_x, const float& cold_y,
-                        const float& max_temp, const float& min_temp,
-                        const bool should_skip_message) override;
+            void onObservations(const de::ai::ObservationFrame& frame) override;
 
             void onIRStatusChanged(const int& status) override;
             void onCameraOverlayHotCold(const float& hot_x, const float& hot_y,
@@ -97,16 +95,9 @@ namespace ir_camera
             
             int m_ir_status = TrackingTarget_STATUS_TRACKING_STOPPED;
             
-            // EMA smoothing for hot point
-            bool m_ema_hot_init = false;
-            double m_ema_hot_x = 0, m_ema_hot_y = 0;
-            
-            // EMA smoothing for cold point
-            bool m_ema_cold_init = false;
-            double m_ema_cold_x = 0, m_ema_cold_y = 0;
-            
-            double m_ema_alpha_base = 0.3;
-            
+            // confirmed hotspot tracks (the single temporal filter of this module)
+            de::ai::TrackManager m_track_manager;
+
             std::unique_ptr<de::ir_camera::CIRCamera> m_camera;
             de::ir_camera::CIRCamera_Facade& m_ir_camera_facade = de::ir_camera::CIRCamera_Facade::getInstance();
 
