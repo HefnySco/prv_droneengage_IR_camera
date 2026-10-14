@@ -6,6 +6,7 @@
 #include "../de_common/de_databus/messages.hpp"
 #include "../de_common/helpers/colors.hpp"
 #include "../de_common/helpers/helpers.hpp"
+#include "../de_common/helpers/overlay_target.hpp"
 #include "../version.hpp"
 #include "ir_camera.hpp"
 #include "ir_camera_main.hpp"
@@ -178,6 +179,7 @@ bool CIRCameraMain::readConfigParameters() {
   m_source_ir_port_device = "";
   m_source_video_device = "";
   m_output_video_device = "";
+  m_overlay_target = "";
 
   if (m_jsonConfig.contains("camera")) {
     Json_de camera = m_jsonConfig["camera"];
@@ -245,6 +247,17 @@ bool CIRCameraMain::readConfigParameters() {
       std::cout << _LOG_CONSOLE_BOLD_TEXT
                 << "No output_video_device specified - display-only mode"
                 << _NORMAL_CONSOLE_TEXT_ << std::endl;
+    }
+
+    // which camera stream this module's overlays belong on (CA-0026):
+    // this module's cam_id is config top-level (stamped on obs), so it is
+    // passed explicitly; "" keeps the legacy draw-on-all-cameras behaviour
+    m_overlay_target = de::camera::resolveOverlayTarget(
+        camera, m_jsonConfig.value("cam_id", std::string("")));
+    if (!m_overlay_target.empty()) {
+      std::cout << _LOG_CONSOLE_BOLD_TEXT
+                << "Overlay target t:" << _INFO_CONSOLE_BOLD_TEXT
+                << m_overlay_target << _NORMAL_CONSOLE_TEXT_ << std::endl;
     }
 
   } else {

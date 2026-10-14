@@ -72,6 +72,13 @@ namespace ir_camera
                 return m_camera_direction;
             }
 
+            // resolved at config load (CA-0026): the CAMERA_OVERLAY_ACTION
+            // target `t`; "" = legacy draw-on-all-cameras
+            inline const std::string& getOverlayTarget() const
+            {
+                return m_overlay_target;
+            }
+
         public:
             //CCommon_Callback
             void OnConnectionStatusChangedWithAndruavServer (const int status) {};
@@ -111,6 +118,7 @@ namespace ir_camera
             std::string m_source_ir_port_device;
             std::string m_source_video_device;
             std::string m_output_video_device;
+            std::string m_overlay_target;
             
             uint16_t m_frames_to_skip_between_messages = 3;
             

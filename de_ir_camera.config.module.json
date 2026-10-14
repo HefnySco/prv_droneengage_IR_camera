@@ -15,6 +15,7 @@
         //"source_video_device_name": "SIM-CAM1",
         "source_ir_port": "/dev/ttyACM0",
         "output_video_device_name": "DE-TRK",
+        //"overlay_target": "DE-THERMAL",   // explicit CAMERA_OVERLAY_ACTION t override; empty = cam_id, then device names
         "desired_input_width": 1024,
         "desired_input_height": 768,
         "no_display": false

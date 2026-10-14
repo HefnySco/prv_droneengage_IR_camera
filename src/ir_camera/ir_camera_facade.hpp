@@ -55,6 +55,10 @@ namespace ir_camera
 
         protected:
 
+            /// stamps the resolved overlay target `t` (CA-0026); a "" target
+            /// leaves the message untouched = legacy draw-on-all-cameras
+            void applyOverlayTarget(Json_de& message) const;
+
             mutable uint32_t m_overlay_send_count = 0;
 
     };

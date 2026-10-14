@@ -9,6 +9,14 @@ using namespace de::ir_camera;
 // High values to avoid colliding with shapes set by other senders.
 static constexpr uint32_t IRCAMERA_OVERLAY_SHAPE_ID = 9201;
 
+void CIRCamera_Facade::applyOverlayTarget(Json_de &message) const {
+  const std::string &overlay_target =
+      de::ir_camera::CIRCameraMain::getInstance().getOverlayTarget();
+  if (!overlay_target.empty()) {
+    message["t"] = overlay_target;
+  }
+}
+
 void CIRCamera_Facade::sendObservations(
     const std::string &target_party_id, const de::ai::ObservationFrame &frame) const {
   Json_de message;
@@ -99,6 +107,8 @@ void CIRCamera_Facade::sendCameraOverlayHotCold(
     message = {{"a", CAMERA_OVERLAY_ACTION_MOVE_SHAPE}, {"m", moves}};
   }
 
+  applyOverlayTarget(message);
+
   m_module.sendJMSG(target_party_id, message,
                     TYPE_AndruavMessage_CAMERA_OVERLAY_ACTION, true);
 
@@ -106,7 +116,9 @@ void CIRCamera_Facade::sendCameraOverlayHotCold(
   static int overlay_send_counter = 0;
   if ((overlay_send_counter++ % 30) == 0) {
     std::cout << "overlay send hot/cold: (" << hot_x << "," << hot_y << ") ("
-              << cold_x << "," << cold_y << ")" << std::endl;
+              << cold_x << "," << cold_y << ")"
+              << " t:" << de::ir_camera::CIRCameraMain::getInstance().getOverlayTarget()
+              << std::endl;
   }
 #endif
 }
@@ -118,13 +130,16 @@ void CIRCamera_Facade::sendCameraOverlayRemove(
   Json_de message = {
       {"a", CAMERA_OVERLAY_ACTION_REMOVE_SHAPE},
       {"i", {IRCAMERA_OVERLAY_SHAPE_ID + 0, IRCAMERA_OVERLAY_SHAPE_ID + 1}}};
+  applyOverlayTarget(message);
 
   m_module.sendJMSG(target_party_id, message,
                     TYPE_AndruavMessage_CAMERA_OVERLAY_ACTION, true);
 
 #ifdef DEBUG_OVERLAY_MSG
   std::cout << "overlay send REMOVE ids:" << IRCAMERA_OVERLAY_SHAPE_ID << ","
-            << IRCAMERA_OVERLAY_SHAPE_ID + 1 << std::endl;
+            << IRCAMERA_OVERLAY_SHAPE_ID + 1
+            << " t:" << de::ir_camera::CIRCameraMain::getInstance().getOverlayTarget()
+            << std::endl;
 #endif
 }
 
