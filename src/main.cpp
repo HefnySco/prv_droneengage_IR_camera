@@ -220,6 +220,8 @@ void initDEModule(int argc, char *argv[])
     cModule.setHardware(hardware_serial, ENUM_HARDWARE_TYPE::HARDWARE_TYPE_CPU);
     cModule.setMessageOnReceive (&onReceive);
 
+    cIRCameraMain.setupCapabilities();
+
     // 0 = auto-detect: CModule::init() picks 8192 for localhost, 1472 for remote.
     int udp_chunk_size = 0;
 

@@ -57,6 +57,10 @@ bool CIRCamera::init(const std::string& thermal_port,
     if (jsonConfig.contains("cam_id") && jsonConfig["cam_id"].is_string() && !jsonConfig["cam_id"].get<std::string>().empty()) {
         m_cam_id = jsonConfig["cam_id"].get<std::string>();
     }
+    // optional horizontal field of view (deg) for the perceive capability advert; 0 = unknown
+    if (jsonConfig.contains("hfov") && jsonConfig["hfov"].is_number()) {
+        m_hfov = jsonConfig["hfov"].get<double>();
+    }
     std::cout << _LOG_CONSOLE_BOLD_TEXT << "hotspot: min_delta_c=" << _INFO_CONSOLE_BOLD_TEXT << m_hotspot_config.min_delta_c
               << _LOG_CONSOLE_BOLD_TEXT << " min_temp_c=" << _INFO_CONSOLE_BOLD_TEXT << m_hotspot_config.min_temp_c
               << _LOG_CONSOLE_BOLD_TEXT << " min_area_px=" << _INFO_CONSOLE_BOLD_TEXT << m_hotspot_config.min_area_px

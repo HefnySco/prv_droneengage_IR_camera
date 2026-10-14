@@ -52,6 +52,7 @@ namespace ir_camera
         public:
             bool init();
             bool uninit();
+            void setupCapabilities();
             
             void loopScheduler();
 

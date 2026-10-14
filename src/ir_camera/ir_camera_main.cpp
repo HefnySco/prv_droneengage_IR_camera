@@ -6,9 +6,11 @@
 #include "../de_common/de_databus/messages.hpp"
 #include "../de_common/helpers/colors.hpp"
 #include "../de_common/helpers/helpers.hpp"
+#include "../version.hpp"
 #include "ir_camera.hpp"
 #include "ir_camera_main.hpp"
 #include "ir_camera_facade.hpp"
+#include "ir_capabilities.hpp"
 #include "video.hpp"
 
 using namespace de::ir_camera;
@@ -451,4 +453,48 @@ void CIRCameraMain::onCameraOverlayHotCold(const float& hot_x, const float& hot_
 void CIRCameraMain::onCameraOverlayRemove()
 {
   m_ir_camera_facade.sendCameraOverlayRemove(std::string(""));
+}
+
+/**
+ * Registers the "perceive" capability advert {cam_id, backend, classes[],
+ * fps, hfov} — the de.cap/1 replacement for the dropped 1077 class list —
+ * and publishes the same record as live state. Called from initDEModule
+ * after defineModule, before registration, so the advert hash rides the ID.
+ */
+void CIRCameraMain::setupCapabilities()
+{
+  if (!m_camera) return;
+
+  std::vector<std::string> classes = {"hotspot"};
+  if (m_camera.get()->getColdspotEnabled())
+  {
+    classes.push_back("coldspot");
+  }
+
+  const Json_de advert = de::ir_camera::buildPerceiveAdvert(
+      "de_ir_camera",
+      version_string,
+      "thermal",
+      m_camera.get()->getCamId(),
+      classes,
+      static_cast<double>(m_camera.get()->getTargetFps()),
+      m_camera.get()->getHfov());
+
+  if (!m_ir_camera_facade.setCapabilities({advert.dump()}))
+  {
+    std::cout << _ERROR_CONSOLE_BOLD_TEXT_
+              << "capability advert rejected for ns perceive"
+              << _NORMAL_CONSOLE_TEXT_ << std::endl;
+    return;
+  }
+
+  m_ir_camera_facade.publishState(
+      "perceive",
+      de::ir_camera::perceiveStatePayload(
+          m_camera.get()->getCamId(),
+          "thermal",
+          classes,
+          static_cast<double>(m_camera.get()->getTargetFps()),
+          m_camera.get()->getHfov()),
+      true);
 }

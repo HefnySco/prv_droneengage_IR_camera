@@ -78,6 +78,12 @@ public:
         m_calib_params = params;
     }
 
+    // perceive capability record fields (de.cap/1 "perceive" state defaults)
+    inline const std::string& getCamId() const { return m_cam_id; }
+    inline uint32_t getTargetFps() const { return m_target_fps; }
+    inline double getHfov() const { return m_hfov; }
+    inline bool getColdspotEnabled() const { return m_hotspot_config.cold_enabled; }
+
     CalibrationParams& getCalibrationParams() {
         return m_calib_params;
     }
@@ -187,6 +193,7 @@ private:
     // hotspot observations
     de::ir_camera::HotspotConfig m_hotspot_config;
     std::string m_cam_id = "DE-THERMAL";
+    double m_hfov = 0.0;
     uint64_t m_last_observed_seq = 0;
     
     // Dual camera support
