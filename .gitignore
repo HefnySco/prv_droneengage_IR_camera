@@ -1,4 +1,5 @@
 bin/
 build/
 .cache/
-de_ir_camera.config.localtest/test_hotspot
+de_ir_camera.config.local
+test/test_hotspot
