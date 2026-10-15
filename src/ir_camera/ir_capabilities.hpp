@@ -16,11 +16,35 @@
 #include <vector>
 
 #include "../de_common/helpers/json_nlohmann.hpp"
+#include "../de_common/de_databus/cap_schema.hpp"
 
 namespace de
 {
 namespace ir_camera
 {
+
+/**
+ * @brief The de.cap namespace of a perceive advert: one per cam_id, so
+ * several perceivers on one unit (e.g. RGB de_perceive + thermal
+ * de_ir_camera) each own a namespace. "perceive_" + the cam_id
+ * lower-cased with every char outside [a-z0-9_] mapped to '_' (the
+ * de.cap name grammar has no '.'), capped at CAP_NAME_MAX_LEN. An empty
+ * cam_id gives the bare "perceive".
+ */
+inline std::string perceiveNamespace (const std::string& cam_id)
+{
+  std::string ns = "perceive";
+  if (cam_id.empty()) return ns;
+  ns += '_';
+  for (const char c : cam_id)
+  {
+    if (ns.size() >= CAP_NAME_MAX_LEN) break;
+    const char l = (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+    const bool ok = (l >= 'a' && l <= 'z') || (l >= '0' && l <= '9') || l == '_';
+    ns += ok ? l : '_';
+  }
+  return ns;
+}
 
 inline nlohmann::json buildPerceiveAdvert (
     const std::string& module,
@@ -35,7 +59,7 @@ inline nlohmann::json buildPerceiveAdvert (
 
   const Json_de advert = Json_de::object(
       {{"schema", "de.cap/1"},
-       {"ns", "perceive"},
+       {"ns", perceiveNamespace(cam_id)},
        {"module", module},
        {"ver", version},
        {"state",
@@ -73,7 +97,7 @@ inline nlohmann::json buildPerceiveAdvert (
 }
 
 /**
- * @brief The matching live-state payload for publishState("perceive", ...).
+ * @brief The matching live-state payload for publishState(perceiveNamespace(cam_id), ...).
  */
 inline nlohmann::json perceiveStatePayload (
     const std::string& cam_id,

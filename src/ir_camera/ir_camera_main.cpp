@@ -496,13 +496,14 @@ void CIRCameraMain::setupCapabilities()
   if (!m_ir_camera_facade.setCapabilities({advert.dump()}))
   {
     std::cout << _ERROR_CONSOLE_BOLD_TEXT_
-              << "capability advert rejected for ns perceive"
+              << "capability advert rejected for ns "
+              << de::ir_camera::perceiveNamespace(m_camera.get()->getCamId())
               << _NORMAL_CONSOLE_TEXT_ << std::endl;
     return;
   }
 
   m_ir_camera_facade.publishState(
-      "perceive",
+      de::ir_camera::perceiveNamespace(m_camera.get()->getCamId()),
       de::ir_camera::perceiveStatePayload(
           m_camera.get()->getCamId(),
           "thermal",
