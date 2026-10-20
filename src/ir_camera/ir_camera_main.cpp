@@ -47,6 +47,16 @@ bool CIRCameraMain::init() {
     return false;
   }
 
+  // startup detection state: absent field = enabled (previous behaviour)
+  {
+    const Json_de cfg = CConfigFile::getInstance().GetConfigJSON();
+    const bool enabled = cfg.contains("detection_enabled") && cfg["detection_enabled"].is_boolean()
+                             ? cfg["detection_enabled"].get<bool>() : true;
+    std::lock_guard<std::mutex> lock(m_track_mutex);
+    m_detection_enabled = enabled;
+    m_ir_status = enabled ? TrackingTarget_STATUS_TRACKING_ENABLED : TrackingTarget_STATUS_TRACKING_STOPPED;
+  }
+
   m_camera = std::make_unique<CIRCamera>(this);
 
   bool ok = m_camera.get()->init(
@@ -397,23 +407,47 @@ bool CIRCameraMain::uninit() {
 
 void CIRCameraMain::enableDetection() {
     // streaming should be always available but when enabled means enable sending hot cold points
-    m_ir_status = TrackingTarget_STATUS_TRACKING_ENABLED;
-    
+    // a stop joined the frames thread: bring it back
+    if (m_camera && m_detection_stopped) {
+        m_camera.get()->start();
+        m_detection_stopped = false;
+    }
+    {
+        std::lock_guard<std::mutex> lock(m_track_mutex);
+        m_track_manager.reset();   // fresh trk ids after a pause/stop
+        m_detection_enabled = true;
+        m_ir_status = TrackingTarget_STATUS_TRACKING_ENABLED;
+    }
+
     // ACK
-    m_ir_camera_facade.sendIRCameraStatus(std::string(""), m_ir_status);
+    m_ir_camera_facade.sendIRCameraStatus(std::string(""), TrackingTarget_STATUS_TRACKING_ENABLED);
 }
 
 void CIRCameraMain::stopDetection() {
-    m_ir_status = TrackingTarget_STATUS_TRACKING_STOPPED;
-    if (m_camera) {
-        m_camera.get()->stop();
+    {
+        std::lock_guard<std::mutex> lock(m_track_mutex);
+        m_detection_enabled = false;
     }
-    m_track_manager.reset();
-    
-    m_ir_camera_facade.sendIRCameraStatus(std::string(""), m_ir_status);
+    if (m_camera) {
+        m_camera.get()->stop();   // joins the frames thread: no more onObservations after this
+        m_detection_stopped = true;
+    }
+    {
+        std::lock_guard<std::mutex> lock(m_track_mutex);
+        m_track_manager.reset();
+        m_ir_status = TrackingTarget_STATUS_TRACKING_STOPPED;
+    }
+
+    m_ir_camera_facade.sendIRCameraStatus(std::string(""), TrackingTarget_STATUS_TRACKING_STOPPED);
 }
 
 void CIRCameraMain::pauseDetection() {
+    // frames thread keeps running (stream stays up); observations are gated off
+    {
+        std::lock_guard<std::mutex> lock(m_track_mutex);
+        m_detection_enabled = false;
+        m_track_manager.reset();
+    }
     if (m_camera) {
         m_camera.get()->pause();
     }
@@ -427,6 +461,8 @@ void CIRCameraMain::pauseDetection() {
  */
 void CIRCameraMain::onObservations(const de::ai::ObservationFrame& frame)
 {
+  std::lock_guard<std::mutex> lock(m_track_mutex);
+  if (!m_detection_enabled) return;
   m_ir_camera_facade.sendObservations(std::string(""), m_track_manager.update(frame));
 }
 

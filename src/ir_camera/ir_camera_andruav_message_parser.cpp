@@ -23,9 +23,20 @@ void CIRCameraAndruavMessageParser::parseCommand(Json_de &andruav_message, const
         switch (cmd["a"].get<int>())
         {
 
-        //TODO: LATER
+        case TrackingTarget_ACTION_TRACKING_ENABLE:
+            CIRCameraMain::getInstance().enableDetection();
+            break;
 
-        
+        case TrackingTarget_ACTION_TRACKING_STOP:
+            CIRCameraMain::getInstance().stopDetection();
+            break;
+
+        case TrackingTarget_ACTION_TRACKING_PAUSE:
+            CIRCameraMain::getInstance().pauseDetection();
+            break;
+
+        default:
+            break;
         }
     }
     break;

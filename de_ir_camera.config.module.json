@@ -38,6 +38,9 @@
     // thermal image (sensor image rotated 90 deg clockwise), top-left, 0..1
     "cam_id": "DE-THERMAL",
 
+    // Startup state of hotspot detection (obs 6546). Absent = true. Runtime control: 6528 a=4 enable, 2 stop, 3 pause
+    "detection_enabled": true,
+
     // Hotspot detection on the temperature matrix
     "hotspot": {
         "min_delta_c": 8.0,       // contrast above the frame median (below it for coldspots)

@@ -2,6 +2,7 @@
 #define IR_CameraMAIN_MODULE_H
 
 #include <thread>
+#include <mutex>
 #include <memory>
 #include "../de_common/de_databus/messages.hpp"
 #include "../de_common/helpers/json_nlohmann.hpp"
@@ -105,6 +106,16 @@ namespace ir_camera
             
             // confirmed hotspot tracks (the single temporal filter of this module)
             de::ai::TrackManager m_track_manager;
+            // serializes m_track_manager.update()/reset() and the enabled gate
+            // (onObservations runs on the frames thread, commands on the parser thread)
+            std::mutex m_track_mutex;
+            bool m_detection_enabled = true;   // guarded by m_track_mutex
+            // THREADING: enableDetection()/stopDetection()/pauseDetection() must all be
+            // called from ONE thread (the command thread). m_detection_stopped is
+            // intentionally NOT guarded by m_track_mutex: stopDetection() calls
+            // CIRCamera::stop(), which joins the frames thread, and that thread takes
+            // m_track_mutex in onObservations() - holding the mutex across stop() would deadlock.
+            bool m_detection_stopped = false;  // frames thread joined by stopDetection()
 
             std::unique_ptr<de::ir_camera::CIRCamera> m_camera;
             de::ir_camera::CIRCamera_Facade& m_ir_camera_facade = de::ir_camera::CIRCamera_Facade::getInstance();

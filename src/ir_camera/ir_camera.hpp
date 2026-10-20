@@ -3,6 +3,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <thread>
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -164,7 +165,7 @@ private:
     cv::Mat sideBySide(const cv::Mat& rgb_image, const cv::Mat& thermal_image);
     cv::Mat pictureInPicture(const cv::Mat& rgb_image, const cv::Mat& thermal_image, double pip_scale = 0.3);
     bool initRGBCamera(const std::string& source_video_device);
-    bool m_process = false;
+    std::atomic<bool> m_process{false};
     std::string m_thermal_port;
     
     SerialCommandSender m_sender;

@@ -325,15 +325,15 @@ void CIRCamera::pause() {
 void CIRCamera::stop() {
     clearCameraOverlayShapes();
 
-    if (!m_process)
-        return;
-
+    const bool was_processing = m_process;
     m_process = false;
 
-    if (m_callback_camera != nullptr) {
+    if (was_processing && m_callback_camera != nullptr) {
         m_callback_camera->onIRStatusChanged(TrackingTarget_STATUS_TRACKING_STOPPED);
     }
 
+    // the thread may have exited by itself (m_process cleared on error) or not
+    // yet set m_process: it is still joinable, and must be joined either way.
     if (m_framesThread.joinable())
         m_framesThread.join();
 }
@@ -357,6 +357,13 @@ void CIRCamera::start() {
         return;
     }
 
+    // never assign over a joinable thread (std::terminate)
+    if (m_framesThread.joinable()) {
+        m_process = false;
+        m_framesThread.join();
+    }
+
+    m_process = true;
     m_framesThread = std::thread([this]() { this->processIRFrames(); });
 }
 
@@ -492,7 +499,8 @@ void CIRCamera::processIRFrames() {
 
     const std::chrono::milliseconds target_frame_time_ms(1000 / m_target_fps);
 
-    m_process = true;
+    // m_process is set true by start() before the thread is spawned, so a stop()
+    // issued right after start() is not overwritten by the thread.
     uint64_t frame_counter = 0;
 
     if (m_callback_camera) {
